@@ -1,7 +1,6 @@
 import os, numpy as np, pandas as pd, matplotlib.pyplot as plt
 
 os.getcwd()
-os.chdir('stat_thinking_py_CS')
 
 fish = pd.read_csv("gandhi_et_al_bouts.csv", skiprows = 4)
 bacteria = pd.read_csv("park_bacterial_growth.csv", skiprows = 2)
@@ -83,6 +82,10 @@ def swap_random(a, b):
     a_out[swap_inds] = b[swap_inds]
 
     return a_out, b_out
+
+def pearson_r(a, b):
+    corr_mat = np.corrcoef(a,b)
+    return (corr_mat)[0,1]
 
 #Fish data manipulation
 fish['genotype'].unique()
@@ -323,5 +326,47 @@ _ = plt.plot(split_number, mean_splits, marker = '.', linewidth = 3, markersize 
 _ = plt.xlabel('split number')
 _ = plt.ylabel('split time (s)')
 plt.show()
-
 ############### Running linear regression analysis ##############
+# Perform regression
+slowdown, split_3 = np.polyfit(x = split_number, y = mean_splits, deg = 1)
+
+# Compute pairs bootstrap
+bs_reps, _ = draw_bs_pairs_linreg(split_number, mean_splits, size = 10**4)
+
+# Compute confidence interval
+conf_int = np.percentile(bs_reps, [2.5, 97.5])
+
+# Plot the data with regressions line
+_ = plt.plot(split_number, mean_splits, marker = '.', linestyle = 'none')
+_ = plt.plot(split_number, slowdown * split_number + split_3, linestyle = '-')
+
+# Label axes and show plot
+_ = plt.xlabel('split number')
+_ = plt.ylabel('split time (s)')
+plt.show()
+
+# Print the slowdown per split
+print("""
+mean slowdown: {0:.3f} sec./split
+95% conf int of mean slowdown: [{1:.3f}, {2:.3f}] sec./split""".format(
+    slowdown, *conf_int))
+
+###Hypo testing the slowdown to see if the correlation is by chance###
+# Observed correlation
+rho = pearson_r(split_number, mean_splits)
+rho
+
+# Initialize permutation reps
+perm_reps_rho = np.empty(shape = 10 ** 4)
+
+# Make permutation reps
+for i in range(10000):
+    # Scramble the split number array
+    scrambled_split_number = np.random.permutation(split_number)
+
+    # Compute the Pearson correlation coefficient
+    perm_reps_rho[i] = pearson_r(scrambled_split_number, mean_splits)
+
+# Compute and print p-value
+p_val = np.sum(perm_reps_rho >= rho) / len(perm_reps_rho)
+print('p =', p_val)
