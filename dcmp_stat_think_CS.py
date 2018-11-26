@@ -370,3 +370,11 @@ for i in range(10000):
 # Compute and print p-value
 p_val = np.sum(perm_reps_rho >= rho) / len(perm_reps_rho)
 print('p =', p_val)
+
+##### Running the 2013 current controversy analysis #####
+swim13.columns.values
+swim13.distance.unique()
+
+test = swim13.loc[(swim13['distance'] == 50) & (swim13)]
+
+test
