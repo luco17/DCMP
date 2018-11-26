@@ -6,6 +6,7 @@ fish = pd.read_csv("gandhi_et_al_bouts.csv", skiprows = 4)
 bacteria = pd.read_csv("park_bacterial_growth.csv", skiprows = 2)
 swim15 = pd.read_csv("2015_FINA.csv", skiprows = 4)
 swim13 = pd.read_csv("2013_FINA.csv", skiprows =4)
+parkfield = pd.read_csv("parkfield_earthquakes_1950-2017.csv", skiprows = 2)
 
 #writing a custom ECDF function
 def ecdf(data):
@@ -370,3 +371,5 @@ for i in range(10000):
 # Compute and print p-value
 p_val = np.sum(perm_reps_rho >= rho) / len(perm_reps_rho)
 print('p =', p_val)
+
+### Parkfield Seismology Analysis ###
