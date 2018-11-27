@@ -19,9 +19,9 @@ def ecdf(data):
 def boot_rep_1d(data, func):
     return func(np.random.choice(data, size = len(data)))
 
-def draw_bs_reps(data, func, no_replicates = 1):
-    bs_replicates = np.empty(no_replicates)
-    for i in range(no_replicates):
+def draw_bs_reps(data, func, size = 1):
+    bs_replicates = np.empty(size)
+    for i in range(size):
         bs_replicates[i] = boot_rep_1d(data, func)
     return(bs_replicates)
 
@@ -373,3 +373,62 @@ p_val = np.sum(perm_reps_rho >= rho) / len(perm_reps_rho)
 print('p =', p_val)
 
 ### Parkfield Seismology Analysis ###
+
+# EDA to look at the magnitudes of earthquakes in Parkfield
+parkfield.columns.values
+mags = parkfield.mag.values
+
+# Label axes and show plot
+_ = plt.plot(*ecdf(mags), marker = '.', linestyle = 'none')
+_ = plt.xlabel('magnitude')
+_ = plt.ylabel('ECDF')
+plt.show()
+
+#Writing a function to compute the b-value of an earthquake region#
+def b_value(mags, mt, perc = [2.5, 97.5], n_reps = None):
+    """Compute the b-value and optionally its confidence interval."""
+    # Extract magnitudes above completeness threshold: m
+    m = mags[mags >= mt]
+
+    # Compute b-value: b
+    b = (np.mean(m) - mt) * np.log(10)
+
+    # Draw bootstrap replicates
+    if n_reps is None:
+        return b
+    else:
+        m_bs_reps = draw_bs_reps(m, np.mean, size = n_reps)
+
+        # Compute b-value from replicates: b_bs_reps
+        b_bs_reps = (m_bs_reps - mt) * np.log(10)
+
+        # Compute confidence interval: conf_int
+        conf_int = np.percentile(b_bs_reps, perc)
+
+        return b, conf_int
+
+### Comparing Parkfield earthquakes vs normal distribution at mag 3 ###
+# Compute b-value and confidence interval
+mt = 3
+
+b, conf_int = b_value(mags, mt, perc=[2.5, 97.5], n_reps = 10**4)
+
+# Generate samples to for theoretical ECDF
+m_theor = np.random.exponential(b/np.log(10), size = 10 **5 ) + mt
+
+# Plot the theoretical CDF
+_ = plt.plot(*ecdf(m_theor))
+
+# Plot the ECDF (slicing mags >= mt)
+_ = plt.plot(*ecdf(mags[mags >= mt]), marker = '.', linestyle = 'none')
+
+# Pretty up and show the plot
+_ = plt.xlabel('magnitude')
+_ = plt.ylabel('ECDF')
+_ = plt.xlim(2.8, 6.2)
+plt.show()
+
+# Report the results
+print("""
+b-value: {0:.2f}
+95% conf int: [{1:.2f}, {2:.2f}]""".format(b, *conf_int))
