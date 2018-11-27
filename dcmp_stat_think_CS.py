@@ -88,6 +88,9 @@ def pearson_r(a, b):
     corr_mat = np.corrcoef(a,b)
     return (corr_mat)[0,1]
 
+def ecdf_formal(x, data):
+    return np.searchsorted(np.sort(data), x, side='right') / len(data)
+
 #Fish data manipulation
 fish['genotype'].unique()
 
@@ -432,3 +435,102 @@ plt.show()
 print("""
 b-value: {0:.2f}
 95% conf int: [{1:.2f}, {2:.2f}]""".format(b, *conf_int))
+
+#manual input of earthquake time gaps#
+time_gap = np.array([24.65, 20.076, 21.018, 12.246, 32.054, 38.253])
+
+# Compute the mean time gap: mean_time_gap
+mean_time_gap = np.mean(time_gap)
+
+# Standard deviation of the time gap: std_time_gap
+std_time_gap = np.std(time_gap)
+
+# Generate theoretical Exponential distribution of timings: time_gap_exp
+time_gap_exp = np.random.exponential(mean_time_gap, size = 10**4)
+
+# Generate theoretical Normal distribution of timings: time_gap_norm
+time_gap_norm = np.random.normal(loc = mean_time_gap, scale = std_time_gap, size = 10**4)
+
+# Plot theoretical CDFs
+_ = plt.plot(*ecdf(time_gap_exp))
+_ = plt.plot(*ecdf(time_gap_norm))
+
+# Plot Parkfield ECDF
+_ = plt.plot(*ecdf(time_gap), marker = '.', linestyle = 'none')
+
+# Add legend
+_ = plt.legend(('Exp.', 'Norm.', 'Actual'), loc='upper left')
+
+# Label axes, set limits and show plot
+_ = plt.xlabel('time gap (years)')
+_ = plt.ylabel('ECDF')
+_ = plt.xlim(-10, 50)
+plt.show()
+
+# Calculating when the next earthquake will be
+today = 2018.9064
+last_quake = 2004.74
+
+# Draw samples from the Exponential distribution: exp_samples
+exp_samples = np.random.exponential(scale = mean_time_gap, size = 10**5)
+
+# Draw samples from the Normal distribution: norm_samples
+norm_samples = np.random.normal(loc = mean_time_gap, scale = std_time_gap, size = 10**5)
+
+# No earthquake as of today, so only keep samples that are long enough
+exp_samples = exp_samples[exp_samples > today - last_quake]
+norm_samples = norm_samples[norm_samples > today - last_quake]
+
+# Compute the confidence intervals with medians
+conf_int_exp = np.percentile(exp_samples, [2.5, 50, 97.5]) + last_quake
+conf_int_norm = np.percentile(norm_samples, [2.5, 50, 97.5]) + last_quake
+
+# Print the results
+print('Exponential:', conf_int_exp)
+print('     Normal:', conf_int_norm)
+
+def ks_stat(data1, data2):
+    # Compute ECDF from data: x, y
+    x, y = ecdf(data1)
+
+    # Compute corresponding values of the target CDF
+    cdf = ecdf_formal(x, data2)
+
+    # Compute distances between concave corners and CDF
+    D_top = y - cdf
+
+    # Compute distance between convex corners and CDF
+    D_bottom = cdf - y + 1/len(data1)
+
+    return np.max((D_top, D_bottom))
+
+def draw_ks_reps(n, f, args = (), size = 10**4, n_reps = 10**4):
+    # Generate samples from target distribution
+    x_f = f(*args, size = size)
+
+    # Initialize K-S replicates
+    reps = np.empty(n_reps)
+
+    # Draw replicates
+    for i in range(n_reps):
+        # Draw samples for comparison
+        x_samp = f(*args, size = n)
+
+        # Compute K-S statistic
+        reps[i] = ks_stat(x_samp, x_f)
+
+    return reps
+
+# Draw target distribution
+x_f = np.random.exponential(mean_time_gap, size=10000)
+
+# Compute K-S stat: d
+d = ks_stat(time_gap, x_f)
+
+# Draw K-S replicates: reps
+reps = draw_ks_reps(len(time_gap), np.random.exponential,
+                         args=(mean_time_gap,), size=10000, n_reps=10000)
+
+# Compute and print p-value
+p_val = np.sum(reps >= d) / 10000
+print('p =', p_val)
