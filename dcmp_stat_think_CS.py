@@ -1,4 +1,5 @@
-import os, numpy as np, pandas as pd, matplotlib.pyplot as plt
+import os, numpy as np, pandas as pd, matplotlib.pyplot as plt, time
+from datetime import datetime as dt
 
 os.getcwd()
 
@@ -7,6 +8,7 @@ bacteria = pd.read_csv("park_bacterial_growth.csv", skiprows = 2)
 swim15 = pd.read_csv("2015_FINA.csv", skiprows = 4)
 swim13 = pd.read_csv("2013_FINA.csv", skiprows =4)
 parkfield = pd.read_csv("parkfield_earthquakes_1950-2017.csv", skiprows = 2)
+oklahoma = pd.read_csv("oklahoma_earthquakes_1950-2017.csv", skiprows = 2)
 
 #writing a custom ECDF function
 def ecdf(data):
@@ -534,3 +536,36 @@ reps = draw_ks_reps(len(time_gap), np.random.exponential,
 # Compute and print p-value
 p_val = np.sum(reps >= d) / 10000
 print('p =', p_val)
+
+
+### Oklahomo Seismology Analysis ###
+oklahoma.columns.values
+
+oklahoma.time.head()
+
+oklahoma['time'] = pd.to_datetime(oklahoma['time'])
+
+oklahoma.time.head()
+
+from datetime import datetime as dt
+
+datetime.datetime(2018, 11, 28, 20, 24, 50, 573398)
+
+def toYearFraction(date):
+    def sinceEpoch(date): # returns seconds since epoch
+        return time.mktime(date.timetuple())
+    s = sinceEpoch
+
+    year = date.year
+    startOfThisYear = dt(year=year, month=1, day=1)
+    startOfNextYear = dt(year=year+1, month=1, day=1)
+
+    yearElapsed = s(date) - s(startOfThisYear)
+    yearDuration = s(startOfNextYear) - s(startOfThisYear)
+    fraction = yearElapsed/yearDuration
+
+    return date.year + fraction
+
+x = oklahoma['time'].apply(lambda x: toYearFraction(x))
+len(x)
+len(oklahoma.mag)
