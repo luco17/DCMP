@@ -1,5 +1,6 @@
 import os, numpy as np, pandas as pd, matplotlib.pyplot as plt, time
 from datetime import datetime as dt
+from datetime import timedelta
 
 os.getcwd()
 
@@ -92,6 +93,21 @@ def pearson_r(a, b):
 
 def ecdf_formal(x, data):
     return np.searchsorted(np.sort(data), x, side='right') / len(data)
+
+def toYearFraction(date):
+    def sinceEpoch(date): # returns seconds since epoch
+        return time.mktime(date.timetuple())
+    s = sinceEpoch
+
+    year = date.year
+    startOfThisYear = dt(year=year, month=1, day=1)
+    startOfNextYear = dt(year=year+1, month=1, day=1)
+
+    yearElapsed = s(date) - s(startOfThisYear)
+    yearDuration = s(startOfNextYear) - s(startOfThisYear)
+    fraction = yearElapsed/yearDuration
+
+    return date.year + fraction
 
 #Fish data manipulation
 fish['genotype'].unique()
@@ -540,32 +556,112 @@ print('p =', p_val)
 
 ### Oklahomo Seismology Analysis ###
 oklahoma.columns.values
-
-oklahoma.time.head()
-
+#Converting time column to datetimes
 oklahoma['time'] = pd.to_datetime(oklahoma['time'])
-
 oklahoma.time.head()
 
-from datetime import datetime as dt
+oklahoma['date_decimal'] = oklahoma['time'].apply(lambda x: toYearFraction(x))
 
-datetime.datetime(2018, 11, 28, 20, 24, 50, 573398)
+mags = oklahoma.loc[(oklahoma['date_decimal'] > 1980) & (oklahoma['date_decimal'] < 2017.5), ['mag']].values
+time = oklahoma.loc[(oklahoma['date_decimal'] > 1980) & (oklahoma['date_decimal'] < 2017.5), ['date_decimal']].values
 
-def toYearFraction(date):
-    def sinceEpoch(date): # returns seconds since epoch
-        return time.mktime(date.timetuple())
-    s = sinceEpoch
+#EDA#
+# Plot time vs. magnitude
+_ = plt.plot(time, mags, marker = '.', linestyle = 'none', alpha = .3)
 
-    year = date.year
-    startOfThisYear = dt(year=year, month=1, day=1)
-    startOfNextYear = dt(year=year+1, month=1, day=1)
+# Label axes and show the plot
+_ = plt.xlabel('time (year)')
+_ = plt.ylabel('magnitude')
+plt.show()
 
-    yearElapsed = s(date) - s(startOfThisYear)
-    yearDuration = s(startOfNextYear) - s(startOfThisYear)
-    fraction = yearElapsed/yearDuration
+#Taking the daily date between earthquakes over mag 3 from 1980 - 2009 and then from 2010 to mid 2017#
 
-    return date.year + fraction
+dt_pre = oklahoma.loc[(oklahoma['date_decimal'] > 1980) & (oklahoma['date_decimal'] < 2010) & (oklahoma['mag'] >= 3), ['time']]
+dt_pre = ((dt_pre['time'].diff().dropna()) / timedelta (days = 1)).values
 
-x = oklahoma['time'].apply(lambda x: toYearFraction(x))
-len(x)
-len(oklahoma.mag)
+dt_post = oklahoma.loc[(oklahoma['date_decimal'] >= 2010) & (oklahoma['date_decimal'] < 2017.5) & (oklahoma['mag'] >= 3), ['time']]
+dt_post = ((dt_post['time'].diff().dropna()) / timedelta (days = 1)).values
+
+# Compute mean interearthquake time
+mean_dt_pre = np.mean(dt_pre)
+mean_dt_post = np.mean(dt_post)
+
+# Draw 10,000 bootstrap replicates of the mean
+bs_reps_pre = draw_bs_reps(dt_pre, np.mean, size = 10**4)
+bs_reps_post = draw_bs_reps(dt_post, np.mean, size = 10**4)
+
+# Compute the confidence interval
+conf_int_pre = np.percentile(bs_reps_pre, [2.5, 97.5])
+conf_int_post = np.percentile(bs_reps_post, [2.5, 97.5])
+
+# Print the results
+print("""1980 through 2009
+mean time gap: {0:.2f} days
+95% conf int: [{1:.2f}, {2:.2f}] days""".format(mean_dt_pre, *conf_int_pre))
+
+print("""
+2010 through mid-2017
+mean time gap: {0:.2f} days
+95% conf int: [{1:.2f}, {2:.2f}] days""".format(mean_dt_post, *conf_int_post))
+# Compute the observed test statistic
+mean_dt_diff = mean_dt_pre - mean_dt_post
+
+# Shift the post-2010 data to have the same mean as the pre-2010 data
+dt_post_shift = dt_post - mean_dt_post + mean_dt_pre
+
+# Compute 10,000 bootstrap replicates from arrays
+bs_reps_pre = draw_bs_reps(dt_pre, np.mean, size = 10**4)
+bs_reps_post = draw_bs_reps(dt_post_shift, np.mean, size = 10**4)
+
+# Get replicates of difference of means
+bs_reps = bs_reps_pre - bs_reps_post
+
+# Compute and print the p-value
+p_val = np.sum(bs_reps >= mean_dt_diff) / 10000
+print('p =', p_val)
+
+##Comparing magnitudes pre and post fracking##
+mags_pre = mags[time < 2010]
+mags_post = mags[time >= 2010]
+
+# Generate ECDFs
+_ = plt.plot(*ecdf(mags_pre), marker = '.', linestyle = 'none')
+
+_ = plt.plot(*ecdf(mags_post), marker = '.', linestyle = 'none')
+
+# Label axes and show plot
+_ = plt.xlabel('magnitude')
+_ = plt.ylabel('ECDF')
+plt.legend(('1980 though 2009', '2010 through mid-2017'), loc='upper left')
+plt.show()
+
+# Compute b-value and confidence interval for pre-2010
+b_pre, conf_int_pre = b_value(mags_pre, mt, perc = [2.5, 97.5], n_reps = 10**4)
+
+# Compute b-value and confidence interval for post-2010
+b_post, conf_int_post = b_value(mags_post, mt, perc = [2.5, 97.5], n_reps = 10**4)
+
+# Report the results
+print("""
+1980 through 2009
+b-value: {0:.2f}
+95% conf int: [{1:.2f}, {2:.2f}]
+
+2010 through mid-2017
+b-value: {3:.2f}
+95% conf int: [{4:.2f}, {5:.2f}]
+""".format(b_pre, *conf_int_pre, b_post, *conf_int_post))
+
+# Only magnitudes above completeness threshold
+mags_pre = mags_pre[mags_pre >= mt]
+mags_post = mags_post[mags_post >= mt]
+
+# Observed difference in mean magnitudes: diff_obs
+diff_obs = np.mean(mags_post) - np.mean(mags_pre)
+
+# Generate permutation replicates: perm_reps
+perm_reps = draw_perm_reps(mags_post, mags_pre, diff_of_means, size = 10**4)
+
+# Compute and print p-value
+p_val = np.sum(perm_reps < diff_obs) / 10000
+print('p =', p_val)
